@@ -22,6 +22,16 @@ Adafruit_PWMServoDriver board1 = Adafruit_PWMServoDriver(0x40);
 #define RACKDEADZONE 1130 + 10
 #define WHEELDEADZONE 1685 
 
+//ultrasonic sensor 
+const int trigPin = 5;
+const int echoPin = 18;
+#define SOUND_SPEED 0.034
+long duration;
+float distanceCm;
+
+//other variables
+int steps_to_go_up = 0;
+
 void setup() {
   Serial.begin(9600);
   Serial.println("32 channel Servo test!");
@@ -29,6 +39,13 @@ void setup() {
   board1.begin();
   board1.setPWMFreq(50); //(60);  // Analog servos run at ~60 Hz updates
   //yield();
+
+  //ultrasonic sensor
+  pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(echoPin, INPUT);  // Sets the echoPin as an Input
+
+  //initialise Noboru
+  init_noboru();
 }
 
 void gripper(int servo_num, int action, int ms) {
@@ -134,31 +151,46 @@ void avoid_branch() {
   //horizontal_move(DIR_RIGHT, 5000);
 }
 
+bool canopy_close(){
+  //use the ultrasonic distance sensor to see if the robot reached the top of the tree
+  
+  // Clears the trigPin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  
+  // Sets the trigPin on HIGH state for 10 microseconds
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  
+  // Reads the echoPin, returns the sound wave travel time in microseconds
+  duration = pulseIn(echoPin, HIGH);
+  
+  // Calculate the distance
+  distanceCm = duration * SOUND_SPEED/2;
+
+  //check if that is close enough to the canopy
+  if (distanceCm <= 15){
+    return true;
+  } else {
+    return false;
+  }
+}
+
 void loop() {
   delay(5000);
-  //init_noboru();
-  board1.writeMicroseconds(RACKNPIN_NUM, RACKDEADZONE);
-  board1.writeMicroseconds(TOP_NUM, WINCHDEADZONE);
-  board1.writeMicroseconds(BOTTOM_NUM, WINCHDEADZONE);
-  // board1.writeMicroseconds(WHEEL1_NUM, WHEELDEADZONE);
-  // board1.writeMicroseconds(WHEEL2_NUM, WHEELDEADZONE);
-  gripper(TOP_NUM, ACTION_CLOSE, 20000);
-  gripper(BOTTOM_NUM, ACTION_CLOSE, 15000);
-  init_noboru();
+  
+  while (!canopy_close) { //go up
+    stepup();
+    steps_to_go_up++; //keep track of how much we go up
+  }
 
-  stepdown();
-  stepup();
+  for (int i=0; i<steps_to_go_up; i++){ //go down
+    stepdown();
+  }
 
-  // gripper(BOTTOM_NUM, ACTION_CLOSE, 5000);
-
-  // Serial.println("moving up");
-  //vertical_move(DIR_DOWN, 5000);
-  // Serial.println("moving down");
-  // vertical_move(DIR_DOWN, 5000);
-  // Serial.println("moving left");
-  // horizontal_move(DIR_LEFT, 5000);
-  // Serial.println("moving right");  
-  // horizontal_move(DIR_RIGHT, 5000);
+  //done
   delay(5000);
-
+  init_noboru(); //grab off the tree
+  delay(120000); //2min to turn off Noboru (or else it climbs again)
 }
